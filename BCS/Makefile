@@ -1,11 +1,14 @@
 include sfmake.inc
 FC=ifort
 HERE   = `pwd`
-EXE=ahmbcs_bethe
-DIREXE   = $(HERE)/test
+#EXE=ahmbcs_bethe
+EXE=ahmbcs_bethe_hf
+#EXE=ahmbcs_bias_hf
+DIREXE   = $(HOME)/.bin
 
 OBJS     = 
 OBJS_DEB =
+
 
 code: 	$(OBJS)
 	@echo "compile: standard"

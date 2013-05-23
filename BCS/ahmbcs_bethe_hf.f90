@@ -17,7 +17,7 @@ program AHM_MF
   USE IOTOOLS
   USE ZEROS
   implicit none
-  integer,parameter      :: ndim=2,M=5000
+  integer,parameter      :: ndim=1,M=5000
   real(8)                :: x(ndim),fvec(ndim)
   real(8)                :: xmu
   real(8)                :: D,de,tol
@@ -43,16 +43,15 @@ program AHM_MF
   allocate(epsi(L),dos(L),csi(L),Ep(L))
   call bethe_lattice(dos,epsi,L,D)
 
-  x=(/0.d0,0.001d0/)
-  write(*,"(A5,4A16)")"Iter","mu","delta","f(mu)","f(delta)"
+  x=(/1.d-1/)
+  write(*,"(A5,2A16)")"Iter","delta","f(delta)"
   call fsolve(bcs_funcs,x,tol,info)
 
   !Post-processing:
-  csi  = epsi - x(1)
-  Ep   = sqrt(csi**2+x(2)**2)
+  delta= x(1)
+  csi  = epsi
+  Ep   = sqrt(csi**2+delta**2)
   n    = 1.d0-sum(dos*csi/Ep)
-  xmu  = x(1)
-  delta= x(2)
 
   allocate(wr(M),zeta(M))
   allocate(fg(2,M))
@@ -75,7 +74,7 @@ program AHM_MF
   call splot("DOS.bcs",wr,-dimag(fg(1,:))/pi,append=printf)
   call splot("G_realw.bcs",wr,fg(1,:),append=printf)
   call splot("F_realw.bcs",wr,fg(2,:),append=printf)
-  call splot("observables.bcs",u,x(1),beta,n,abs(delta),append=printf)
+  call splot("observables.bcs",u,beta,n,abs(delta),append=printf)
 end program AHM_MF
 
 
@@ -88,9 +87,9 @@ subroutine bcs_funcs(n,x,fvec,iflag)
   integer :: iflag,iter=0
   save iter
   iter=iter+1
-  csi = epsi - x(1)
-  Ep  = sqrt(csi**2+x(2)**2)
-  fvec(1) = 1.d0-sum(dos*csi/Ep)-n0
-  fvec(2) = u/2.d0*sum(dos*tanh(beta/2.d0*Ep)/Ep)-1.d0
-  write(*,"(I5,4F16.9)")iter,x(1),x(2),fvec(1),fvec(2)
+  csi = epsi
+  Ep  = sqrt(csi**2+x(1)**2)
+  !fvec(1) = 1.d0-sum(dos*csi/Ep)-n0
+  fvec(1) = u/2.d0*sum(dos*tanh(beta/2.d0*Ep)/Ep)-1.d0
+  write(*,"(I5,4F16.9)")iter,x(1),fvec(1)
 end subroutine bcs_funcs
