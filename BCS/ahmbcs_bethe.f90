@@ -1,7 +1,5 @@
 !Set variables in common for the BCS solution
 module BCS_COMMON
-  USE COMMON_VARS
-  USE INTEGRATE
   implicit none
   integer             :: L
   real(8)             :: beta,u
@@ -11,11 +9,8 @@ end module BCS_COMMON
 
 program AHM_MF
   USE BCS_COMMON
-  USE PARSE_CMD
-  USE TOOLS
-  USE FUNCTIONS
-  USE IOTOOLS
-  USE ZEROS
+  USE SCIFOR
+  USE DMFT_TOOLS
   implicit none
   integer,parameter      :: ndim=2,M=5000
   real(8)                :: x(ndim),fvec(ndim)
@@ -24,7 +19,7 @@ program AHM_MF
   real(8)                :: n,delta,wmax,eps
   integer                :: i,ik,iflag,info
   real(8),allocatable    :: wr(:)
-  complex(8)             :: det,zeta1,zeta2,x1,x2
+  complex(8)             :: zdet,zeta1,zeta2,x1,x2
   complex(8),allocatable :: fg(:,:),zeta(:)
   logical                :: printf
   external bcs_funcs
@@ -67,9 +62,9 @@ program AHM_MF
      fg(1,i) = zeta2/(x2-x1)*(gfbether(wr(i),x1,D)-gfbether(wr(i),x2,D))
      fg(2,i) =-delta/(x2-x1)*(gfbether(wr(i),x1,D)-gfbether(wr(i),x2,D))
      ! do ik=1,L
-     !    det = (zeta1-epsi(ik))*(zeta2-epsi(ik)) + delta**2
-     !    fg(1,i)=fg(1,i) + dos(ik)*(zeta2-epsi(ik))/det
-     !    fg(2,i)=fg(2,i) - dos(ik)*delta/det
+     !    zdet = (zeta1-epsi(ik))*(zeta2-epsi(ik)) + delta**2
+     !    fg(1,i)=fg(1,i) + dos(ik)*(zeta2-epsi(ik))/zdet
+     !    fg(2,i)=fg(2,i) - dos(ik)*delta/zdet
      ! enddo
   enddo
   call splot("DOS.bcs",wr,-dimag(fg(1,:))/pi,append=printf)
@@ -83,7 +78,7 @@ subroutine bcs_funcs(n,x,fvec,iflag)
   USE BCS_COMMON
   implicit none
   integer :: n
-  real(8) :: x(n)
+  real(8),intent(in) :: x(n)
   real(8) :: fvec(n)
   integer :: iflag,iter=0
   save iter

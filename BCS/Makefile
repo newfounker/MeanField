@@ -1,9 +1,8 @@
-include sfmake.inc
 FC=ifort
 HERE   = `pwd`
 #EXE=ahmbcs_bethe
 #EXE=ahmbcs_bethe_hf
-EXE=ahmbcs_bias_hf
+EXE=ahmbcs_bias_hf2
 DIREXE   = $(HOME)/.bin
 
 OBJS     = 
