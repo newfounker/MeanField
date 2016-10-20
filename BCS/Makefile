@@ -1,33 +1,30 @@
-FC=ifort
-HERE   = `pwd`
-#EXE=ahmbcs_bethe
-#EXE=ahmbcs_bethe_hf
-EXE=ahmbcs_bias_hf2
-DIREXE   = $(HOME)/.bin
+include make.inc
 
-OBJS     = 
-OBJS_DEB =
+OBJS= 
 
+all: version compile completion
+debug: debug version compile completion
 
-code: 	$(OBJS)
-	@echo "compile: standard"
-	${FC} ${STD} ${OBJS} ${EXE}.f90 -o ${DIREXE}/${EXE} ${SFMODS} ${SFLIBS} ${MORELIB}
+debug: FFLAG=$(DFLAG)
+
+compile: $(OBJS)
+	@echo " ..................... compile ........................... "
+	$(FC) $(FFLAG) $(OBJS) $(DIR)/$(EXE).f90 -o $(DIREXE)/$(EXE)$(BRANCH) $(ARGS)
+	@echo " ...................... done .............................. "
 	@echo ""
-
-opt: 	$(OBJS)
-	@echo "compile: optimized"
-	${FC} ${OPT}  ${OBJS} ${EXE}.f90 -o ${DIREXE}/${EXE} ${SFMODS} ${SFLIBS}
 	@echo ""
+	@echo "created" $(DIREXE)/$(EXE)$(BRANCH)
 
-debug:	$(OBJS_DEB)	
-	@echo "compile: debug"
-	${FC} ${DEB} ${OBJS} ${EXE}.f90 -o ${DIREXE}/${EXE}  ${SFMODS} ${SFLIBS} ${MORELIB}
-	@echo ""
+.f90.o:	
+	$(FC) $(FFLAG) -c $< 
+
+completion:
+	scifor_completion.sh $(DIR)/$(EXE).f90
 
 clean: 
 	@echo "Cleaning:"
-	@rm -f *.mod
-	@rm -f *.o
-	@rm -f *~
-	@rm -f ${DIREXE}/${EXE}
-	@echo ""
+	@rm -f *.mod *.o *~ revision.inc
+
+version:
+	@echo $(VER)
+

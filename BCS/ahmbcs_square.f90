@@ -15,33 +15,46 @@ program AHM_MF
   integer,parameter      :: ndim=2,M=5000
   real(8)                :: x(ndim),fvec(ndim)
   real(8)                :: xmu
-  real(8)                :: D,de,tol
-  real(8)                :: n,delta,wmax,eps
-  integer                :: i,ik,iflag,info
+  real(8)                :: ts,de,tol,delta0
+  real(8)                :: n,delta,wmax,eps,kx,ky
+  integer                :: i,ix,iy,ik,iflag,info,Nkx,Lk
   real(8),allocatable    :: wr(:)
   complex(8)             :: zdet,zeta1,zeta2,x1,x2
   complex(8),allocatable :: fg(:,:),zeta(:)
-  logical                :: printf
+  logical                :: printf,bool
+
   external bcs_funcs
-  namelist/bcsvars/L,beta,u,D,wmax,eps,tol,n0,printf
-  call parse_cmd_variable(L,"L",default=5000)
-  call parse_cmd_variable(beta,"BETA",default=1000.d0)
-  call parse_cmd_variable(u,"U",default=1.d0)
-  call parse_cmd_variable(D,"D",default=1.d0)
-  call parse_cmd_variable(wmax,"WMAX",default=5.d0)
-  call parse_cmd_variable(eps,"EPS",default=1.d-4)
-  call parse_cmd_variable(tol,"TOL",default=1.d-15)
-  call parse_cmd_variable(n0,"N0",default=1.d0)
-  call parse_cmd_variable(printf,"PRINTF",default=.false.)
-  write(*,nml=bcsvars)
-  open(10,file="inputBCS.conf")
-  write(10,nml=bcsvars)
-  close(10)
 
-  allocate(epsi(L),dos(L),csi(L),Ep(L))
-  call bethe_lattice(dos,epsi,L,D)
+  call parse_input_variable(L,"L","inputBCS.conf",default=5000)
+  call parse_input_variable(Nkx,"NKX","inputBCS.conf",default=100)
+  call parse_input_variable(beta,"BETA","inputBCS.conf",default=1000.d0)
+  call parse_input_variable(u,"U","inputBCS.conf",default=1.d0)
+  call parse_input_variable(ts,"TS","inputBCS.conf",default=0.5d0)
+  call parse_input_variable(wmax,"WMAX","inputBCS.conf",default=5.d0)
+  call parse_input_variable(eps,"EPS","inputBCS.conf",default=0.01d0)
+  call parse_input_variable(tol,"TOL","inputBCS.conf",default=1.d-15)
+  call parse_input_variable(n0,"N0","inputBCS.conf",default=1.d0)
+  call parse_input_variable(delta0,"DELTA0","inputBCS.conf",default=1.d-2)
+  call parse_input_variable(printf,"PRINTF","inputBCS.conf",default=.false.)
+  call save_input_file("inputBCS.conf")
 
-  x=(/0.d0,0.001d0/)
+  Lk=Nkx**2
+  allocate(epsi(Lk),dos(Lk),csi(Lk),Ep(Lk))
+  ik=0
+  do ix=1,Nkx
+     kx = -pi + (ix-1)*pi2/Nkx
+     do iy=1,Nkx
+        ky = -pi + (iy-1)*pi2/Nkx
+        ik=ik+1
+        epsi(ik) = -2d0*ts*(cos(kx)+cos(ky))
+     enddo
+  enddo
+  dos = 1d0/Lk
+  call get_free_dos(epsi,dos)
+
+  xmu=0d0
+  delta=delta0
+  x=[xmu,delta]
   write(*,"(A5,4A16)")"Iter","mu","delta","f(mu)","f(delta)"
   call fsolve(bcs_funcs,x,tol,info)
 
@@ -60,20 +73,16 @@ program AHM_MF
   do i=1,M
      zeta1 = zeta(i)
      zeta2 = conjg(zeta(M+1-i))
-     x1 = 0.5d0*((zeta1+zeta2) + sqrt((zeta1-zeta2)**2 - 4.d0*delta**2 ))
-     x2 = 0.5d0*((zeta1+zeta2) - sqrt((zeta1-zeta2)**2 - 4.d0*delta**2 ))
-     fg(1,i) = zeta2/(x2-x1)*(gfbether(wr(i),x1,D)-gfbether(wr(i),x2,D))
-     fg(2,i) =-delta/(x2-x1)*(gfbether(wr(i),x1,D)-gfbether(wr(i),x2,D))
-     ! do ik=1,L
-     !    zdet = (zeta1-epsi(ik))*(zeta2-epsi(ik)) + delta**2
-     !    fg(1,i)=fg(1,i) + dos(ik)*(zeta2-epsi(ik))/zdet
-     !    fg(2,i)=fg(2,i) - dos(ik)*delta/zdet
-     ! enddo
+     do ik=1,Lk
+        zdet = (zeta1-epsi(ik))*(zeta2-epsi(ik)) + delta**2
+        fg(1,i)=fg(1,i) + dos(ik)*(zeta2-epsi(ik))/zdet
+        fg(2,i)=fg(2,i) - dos(ik)*delta/zdet
+     enddo
   enddo
   call splot("DOS.bcs",wr,-dimag(fg(1,:))/pi,append=printf)
   call splot("G_realw.bcs",wr,fg(1,:),append=printf)
   call splot("F_realw.bcs",wr,fg(2,:),append=printf)
-  call splot("observables.bcs",u,x(1),beta,n,abs(delta),append=printf)
+  call splot("observables.bcs",u,abs(delta),xmu,beta,n,append=printf)
 end program AHM_MF
 
 

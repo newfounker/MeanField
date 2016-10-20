@@ -1,12 +1,7 @@
-! disorder realization depends on the parameter int idum:
-! so that different realizations (statistics) are performed 
-! calling this program many times providing a *different* seed 
-! +IDUM. 
 program bdg_disorder
   USE SCIFOR
   USE DMFT_TOOLS
   implicit none
-
   integer                               :: Nside,Nlat
   integer                               :: Nloop
   integer                               :: Lmats,Lreal
@@ -40,16 +35,16 @@ program bdg_disorder
   call parse_input_variable(wmixing,"WMIXING",finput,default=0.5d0)
   call parse_input_variable(Wdis,"WDIS",finput,default=0.d0)
   call parse_input_variable(idum,"IDUM",finput,default=1234567)
-  call parse_input_variable(nsc,"NSC",finput,default=1d0,comment="Value of the initial density.")
+  call parse_input_variable(nsc,"NSC",finput,default=0.5d0,comment="Value of the initial density per spin (1/2=half-filling).")
   call parse_input_variable(deltasc,"DELTASC",finput,default=0.02d0,comment="Value of the SC symmetry breaking term.")
-  call parse_input_variable(nloop,"NLOOP",finput,default=100,comment="Max number of iterations.")
+  call parse_input_variable(nloop,"NLOOP",finput,default=500,comment="Max number of iterations.")
   call parse_input_variable(Lmats,"LMATS",finput,default=2000,comment="Number of Matsubara frequencies.")
   call parse_input_variable(Lreal,"LREAL",finput,default=2000,comment="Number of real-axis frequencies.")
   call parse_input_variable(wini,"WINI",finput,default=-5.d0,comment="Smallest real-axis frequency")
   call parse_input_variable(wfin,"WFIN",finput,default=5.d0,comment="Largest real-axis frequency")
   call parse_input_variable(bdg_error,"BDG_ERROR",finput,default=0.00001d0,comment="Error threshold for the convergence")
   call parse_input_variable(nsuccess,"NSUCCESS",finput,default=1,comment="Number of successive iterations below threshold for convergence")
-
+  call save_input_file(finput)
   ! SET THE COMPRESSION THRESHOLD TO 1Mb (1024Kb)
   call set_store_size(1024)
 
@@ -90,6 +85,8 @@ program bdg_disorder
 
   nii=nsc;
   pii=deltasc;
+  call read_data("nVSisite.bdg",nii)
+  call read_data("phiVSisite.bdg",pii)
   iloop=0;
   converged=.false.;
   !+-------------------------------------+!
@@ -98,9 +95,6 @@ program bdg_disorder
      call start_loop(iloop,nloop,"BdG-loop")
 
      call BdG_Solve(nii,pii,H0)
-     do i=1,Nlat
-        print*,i,nii(i),pii(i)
-     enddo
      converged = check_convergence_local(pii,bdg_error,nsuccess,nloop,file="error.err")
      call print_sc_out(converged)
 
@@ -117,7 +111,6 @@ contains
     real(8),dimension(Nlat),intent(inout)   :: nii
     real(8),dimension(Nlat),intent(inout)   :: pii
     real(8),dimension(Nlat,Nlat),intent(in) :: H
-    !
     real(8),dimension(Nlat)                 :: Sigma_HFB
     real(8),dimension(Nlat)                 :: Self_HFB
     real(8),dimension(2*Nlat,2*Nlat)        :: Hnambu
@@ -125,13 +118,17 @@ contains
     real(8),dimension(2*Nlat)               :: RhoDiag  !diagonal density matrix 
     real(8),dimension(2*Nlat,2*Nlat)        :: RhoNambu !Nambu density matrix
     integer                                 :: ilat
-    Sigma_HFB(:) = -Uloc*nii(:)/2
+    Sigma_HFB(:) =  Uloc*(nii-0.5d0)
     Self_HFB(:)  =  Uloc*pii(:)
     Hnambu(1:Nlat,1:Nlat)               =  H + diag(Sigma_HFB)
     Hnambu(1:Nlat,Nlat+1:2*Nlat)        =    + diag(Self_HFB)
     Hnambu(Nlat+1:2*Nlat,1:Nlat)        =    + diag(Self_HFB)
     Hnambu(Nlat+1:2*Nlat,Nlat+1:2*Nlat) = -H - diag(Sigma_HFB)
     call eigh(HNambu,ENambu)
+    do ilat=1,2*Nlat
+       write(100,*)ilat,ENambu(ilat)
+    enddo
+    rewind(100)
     RhoDiag  = fermi(ENambu,beta)
     RhoNambu = matmul(HNambu, matmul(diag(RhoDiag),transpose(HNambu)) ) 
     forall(ilat=1:Nlat)
@@ -167,6 +164,7 @@ contains
     real(8),dimension(2)           :: data_mean,data_sdev,Eout
     logical                        :: converged
     character(len=50)              :: suffix
+    nii=nii*2
     suffix=".bdg"
     !Get CDW "order parameter"
     do is=1,Nlat
@@ -232,6 +230,7 @@ contains
        enddo
        close(10)
     end if
+    nii=nii/2
   end subroutine print_sc_out
 
 
