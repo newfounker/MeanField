@@ -137,6 +137,7 @@ program bdg_haldane
   enddo
   !+-------------------------------------+!
 
+  call ChernNumber()
 
 contains
 
@@ -203,10 +204,10 @@ contains
     kdota(2) = dot_product(kpoint,a2)
     kdota(3) = dot_product(kpoint,a3)
     !
-    h0 = -2*tsp*cos(phi)*sum( cos(kdota(:)) )
+    h0 = -2*tsp*cos(-phi)*sum( cos(kdota(:)) )
     hx =-ts*sum( cos(kdotd(:)) )
     hy =-ts*sum( sin(kdotd(:)) )
-    hz = -2*tsp*sin(phi)*sum( sin(kdota(:)) ) + Mh 
+    hz = -2*tsp*sin(-phi)*sum( sin(kdota(:)) ) + Mh 
     hk = h0*pauli_0 + hx*pauli_x + hy*pauli_y + hz*pauli_z
   end function hk_haldane_model
 
@@ -329,7 +330,7 @@ contains
     kxgrid=linspace(0d0,pi2,Nk)
     call splot3d("Berry_Curvature.nint",kxgrid,kxgrid,Berry_Curvature)
     open(10,file="ChernNumber.dat")
-    write(10,*)int(chern)
+    write(10,"(I3,F16.12)")nint(chern),chern
     close(10)
   end subroutine ChernNumber
   !
