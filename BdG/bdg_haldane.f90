@@ -190,7 +190,7 @@ contains
     real(8),dimension(:)            :: kpoint
     integer                         :: Nlso
     complex(8),dimension(Nlso,Nlso) :: hk
-    real(8)                         :: h0,hx,hy,hz
+    real(8)                         :: h11,h22,h12,h21
     real(8)                         :: kdotd(3),kdota(3)
     !(k.d_j)
     kdotd(1) = dot_product(kpoint,d1)
@@ -201,11 +201,11 @@ contains
     kdota(2) = dot_product(kpoint,a2)
     kdota(3) = dot_product(kpoint,a3)
     !
-    h0 = -2*tsp*cos(phi)*sum( cos(kdota(:)) )
-    hx =-ts*sum( cos(kdotd(:)) )
-    hy =-ts*sum( sin(kdotd(:)) )
-    hz = -2*tsp*sin(phi)*sum( sin(kdota(:)) ) + Mh 
-    hk = h0*pauli_0 + hx*pauli_x + hy*pauli_y + hz*pauli_z
+    h11 = -2*tsp*sum( cos(kdota(:) + phi) ) + Mh/2d0
+    h12 =    -ts*sum( exp(-xi*kdotd(:)) )
+    h21 =    -ts*sum( exp( xi*kdotd(:)) )
+    h22 = -2*tsp*sum( cos(kdota(:) - phi) ) - Mh/2d0
+    hk  = reshape([h11,h21,h12,h22],[2,2])
   end function hk_haldane_model
 
   function hk_NambuHaldane_model(kpoint,N) result(hk)
@@ -214,16 +214,18 @@ contains
     complex(8),dimension(N,N)       :: hk
     complex(8),dimension(Nlso,Nlso) :: hk11,hk22
     real(8),dimension(Nlso)         :: sigma,self
-    real(8)                         :: h0,hx,hy,hz
+    !
     if(2*Nlso/=N)stop "hk_NambuHaldane_model ERROR: 2*Nlso != N"
-    hk11  = hk_haldane_model(kpoint,Nlso)
-    hk22  = conjg(hk_haldane_model(-kpoint,Nlso))
+    !
+    hk11  = hk_haldane_model(kpoint,N)
+    hk22  =-conjg(hk_haldane_model(-kpoint,N))
+    !
     sigma =  Uloc*(nii(:)-0.5d0)
     self  =  Uloc*pii(:)
     Hk(1:Nlso,1:Nlso)               =  hk11  + diag(sigma)
     Hk(1:Nlso,Nlso+1:2*Nlso)        =        + diag(self)
     Hk(Nlso+1:2*Nlso,1:Nlso)        =        + diag(self)
-    Hk(Nlso+1:2*Nlso,Nlso+1:2*Nlso) = -hk22  - diag(sigma) !Hk22=H*(-k)
+    Hk(Nlso+1:2*Nlso,Nlso+1:2*Nlso) =  hk22  - diag(sigma) !Hk22=H*(-k)
   end function hk_NambuHaldane_model
 
 
@@ -246,7 +248,7 @@ contains
     KPath(2,:)=pointK
     Kpath(3,:)=pointKp
     KPath(4,:)=[0d0,0d0]
-    call TB_Solve_path(hk_NambuHaldane_model,2*Nlso,KPath,Nkpath,&
+    call TB_Solve_model(hk_NambuHaldane_model,2*Nlso,KPath,Nkpath,&
          colors_name=[red1,blue1,green1,orange1],&
          points_name=[character(len=10) :: "G","K","K`","G"],&
          file="Eigenbands.bdg")

@@ -1,0 +1,242 @@
+program bcs_haldane
+  USE SCIFOR
+  USE DMFT_TOOLS
+  implicit none
+  integer,parameter                       :: Norb=1,Nspin=1,Nlat=2,Ndim=1
+  integer                                 :: Nso,Nlso
+  integer                                 :: Nloop
+  integer                                 :: Lmats,Lreal
+  integer                                 :: Nsuccess
+  integer                                 :: Lk
+  !
+  real(8)                                 :: x(ndim),fvec(ndim)
+  !variables for the model:
+  integer                                 :: Nk,Nkpath
+  real(8)                                 :: Uloc
+  real(8)                                 :: ts,tsp,phi,delta,Mh,wmixing,xmu,eps
+  real(8)                                 :: beta
+  real(8)                                 :: Wdis
+  real(8)                                 :: n0
+  real(8)                                 :: delta0
+  real(8)                                 :: wini,wfin
+  real(8)                                 :: tol
+  !
+  complex(8),allocatable,dimension(:,:,:) :: Hk
+  real(8)                                 :: a,a0,bklen,chern,kx,ky
+  real(8),allocatable,dimension(:,:)      :: kvec
+  !
+  real(8),dimension(2)                    :: d1,d2,d3
+  real(8),dimension(2)                    :: a1,a2,a3
+  real(8),dimension(2)                    :: bk1,bk2,pointK,pointKp
+  real(8),dimension(:),allocatable        :: nii,pii,pii_prev ![Nlat]
+  logical                                 :: converged,bool
+  integer                                 :: ik,i,is,iloop,ix,iy,info
+  character(len=50)                       :: finput
+
+  ! READ INPUT FILES !
+  call parse_cmd_variable(finput,"FINPUT",default="inputBDG.conf")
+  call parse_input_variable(nk,"NK",finput,default=100)
+  call parse_input_variable(nkpath,"NKPATH",finput,default=500)
+  call parse_input_variable(ts,"TS",finput,default=1d0)
+  call parse_input_variable(tsp,"TSP",finput,default=1.d0/3/sqrt(3d0))
+  call parse_input_variable(mh,"MH",finput,default=0d0)
+  call parse_input_variable(phi,"PHI",finput,default=0d0)
+  call parse_input_variable(uloc,"ULOC",finput,default=1d0,comment="Values of the local interaction")
+  call parse_input_variable(xmu,"XMU",finput,default=0d0)
+  call parse_input_variable(beta,"BETA",finput,default=1000d0)
+  call parse_input_variable(eps,"EPS",finput,default=1d-3)
+  call parse_input_variable(tol,"TOL",finput,default=1.d-15)
+  call parse_input_variable(delta0,"DELTA0",finput,default=0.02d0,comment="Value of the SC symmetry breaking term.")
+  call parse_input_variable(n0,"N0",finput,default=2d0,comment="Value of the initial density per spin (2=half-filling).")
+  call parse_input_variable(Lmats,"LMATS",finput,default=2000,comment="Number of Matsubara frequencies.")
+  call parse_input_variable(Lreal,"LREAL",finput,default=2000,comment="Number of real-axis frequencies.")
+  call parse_input_variable(wini,"WINI",finput,default=-15.d0,comment="Smallest real-axis frequency")
+  call parse_input_variable(wfin,"WFIN",finput,default=15.d0,comment="Largest real-axis frequency")
+
+  call save_input_file(finput)
+
+  ! SET THE COMPRESSION THRESHOLD TO 1Mb (1024Kb)
+  call set_store_size(1024)
+
+  call add_ctrl_var(beta,"BETA")
+  call add_ctrl_var(xmu,"xmu")
+  call add_ctrl_var(wini,"wini")
+  call add_ctrl_var(wfin,"wfin")
+  call add_ctrl_var(eps,"eps")
+
+  !These equations are valid only for Phi=Pi/2
+  phi=pi/2d0                    !phi*pi
+
+  Nso=Nspin*Norb
+  Nlso=Nlat*Nso
+
+  a=1d0
+  a0=a*sqrt(3d0)
+
+  !Lattice basis (a=1; a0=sqrt3*a) is:
+  !\a_1 = a0 [ sqrt3/2 , 1/2 ]
+  !\a_2 = a0 [ sqrt3/2 ,-1/2 ]
+  !
+  !nearest neighbor: A-->B, B-->A
+  d1= a*[  1d0/2d0 , sqrt(3d0)/2d0 ]
+  d2= a*[  1d0/2d0 ,-sqrt(3d0)/2d0 ]
+  d3= a*[ -1d0     , 0d0           ]
+  !
+  !
+  !next nearest-neighbor displacements: A-->A, B-->B
+  a1 = d2-d3                    !a*sqrt(3)[sqrt(3)/2,-1/2]
+  a2 = d3-d1                    !a*sqrt(3)[-sqrt(3)/2,-1/2]
+  a3 = d1-d2                    !a*sqrt(3)[0, 1]
+  !
+  !
+  !RECIPROCAL LATTICE VECTORS:
+  bklen=4d0*pi/sqrt(3d0)
+  bk1=bklen*[ sqrt(3d0)/2d0 ,  1d0/2d0 ]
+  bk2=bklen*[ sqrt(3d0)/2d0 , -1d0/2d0 ]
+  !
+  !
+  pointK = [2*pi/3, 2*pi/3/sqrt(3d0)]
+  pointKp= [2*pi/3,-2*pi/3/sqrt(3d0)]
+
+
+  ! BUILD THE RECIPROCAL VECTOR GRID !
+  Lk=Nk*Nk
+  write(*,*)"# of k-points     :",Lk
+  allocate(Hk(Nlso,Nlso,Lk))
+  allocate(kvec(2,Lk))
+  ik=0
+  do iy=1,Nk
+     ky = dble(iy-1)/Nk
+     do ix=1,Nk
+        ik=ik+1
+        kx=dble(ix-1)/Nk
+        kvec(:,ik) = kx*bk1 + ky*bk2
+        Hk(:,:,ik) = hk_haldane_model(kvec(:,ik),Nlso)
+     enddo
+  enddo
+
+
+
+  open(100,file="Hybrd_result.dat",position='append')
+  write(100,"(A5,4A16)")"Iter","delta","f(delta)"
+  ! x=[uloc*delta0]
+  ! call fsolve(bcs_funcs,x,tol,info)
+  ! delta = abs(x(1))
+  ! call bcs_funcs(ndim,x,fvec,info)
+  ! open(10,file="deltaVSuloc.dat",position="append")  
+  ! if(abs(fvec(1))<1.d-4)then
+  !    write(10,*)uloc,delta
+  !    write(*,*)"Delta=",delta
+  ! else
+  !    write(10,*)uloc,0d0
+  !    write(*,*)"Delta=",0d0
+  ! end if
+  ! close(10)
+
+  
+  delta = fzero_brentq(solve_bcs,1d-7,1d0)
+  open(10,file="deltaVSuloc.dat",position="append")  
+  write(10,*)uloc,delta
+  write(*,*)"Delta=",delta
+  close(10)
+
+
+  close(100)
+
+
+
+
+contains
+
+
+
+
+  !--------------------------------------------------------------------!
+  !Haldane HAMILTONIAN:
+  !--------------------------------------------------------------------!
+  function hk_haldane_model(kpoint,Nlso) result(hk)
+    real(8),dimension(:)            :: kpoint
+    integer                         :: Nlso
+    complex(8),dimension(Nlso,Nlso) :: hk
+    complex(8)                      :: h11,h22,h12,h21
+    real(8)                         :: kdotd(3),kdota(3)
+    !(k.d_j)
+    kdotd(1) = dot_product(kpoint,d1)
+    kdotd(2) = dot_product(kpoint,d2)
+    kdotd(3) = dot_product(kpoint,d3)
+    !(k.a_j)
+    kdota(1) = dot_product(kpoint,a1)
+    kdota(2) = dot_product(kpoint,a2)
+    kdota(3) = dot_product(kpoint,a3)
+    !
+    h11 = 2*tsp*sum( cos(kdota(:) + phi) ) + Mh
+    h12 =    ts*sum( exp(xi*kdotd(:)) )
+    h21 =    ts*sum( exp(-xi*kdotd(:)) )
+    h22 = 2*tsp*sum( cos(kdota(:) - phi) ) - Mh
+    !
+    hk  = reshape([h11,h21,h12,h22],[2,2])
+  end function hk_haldane_model
+
+
+
+
+  subroutine bcs_funcs(n,x,fvec,iflag)
+    integer                  :: n
+    real(8)                  :: x(n)
+    real(8)                  :: fvec(n)
+    integer                  :: iflag,iter=0
+    complex(8),dimension(Lk) :: betak,alfak    
+    real(8),dimension(Lk)    :: Ep1,Ep2,Num1,Num2
+    real(8)                  :: sqrt2,Xdelta
+    save iter
+    iter=iter+1
+    betak = hk(1,1,:)-Mh
+    alfak = hk(1,2,:)
+    Xdelta=Uloc*x(1)
+    sqrt2 = sqrt( Xdelta**2 + Mh**2 )
+    Ep1 = sqrt( abs(alfak)**2 + ( abs(betak) + sqrt2 )**2 ) 
+    Ep2 = sqrt( abs(alfak)**2 + ( abs(betak) - sqrt2 )**2 ) 
+    Num1 = abs(betak)+sqrt2 ; Num1=Num1/sqrt2    
+    Num2 = abs(betak)-sqrt2 ; Num2=Num2/sqrt2    
+    fvec(1) = uloc/4d0/Lk*sum( Num1/Ep1*tanh(beta*Ep1/2d0) - Num2/Ep2*tanh(beta*Ep2/2d0) ) - 1d0
+    write(100,"(I5,4F16.9)")iter,x(1),fvec(1)    
+  end subroutine bcs_funcs
+
+
+
+
+  function solve_bcs(x) result(fvec)
+    real(8),intent(in)       :: x
+    real(8)                  :: fvec
+    integer                  :: iflag,iter=0
+    complex(8),dimension(Lk) :: betak,alfak    
+    real(8),dimension(Lk)    :: Ep1,Ep2,Num1,Num2
+    real(8)                  :: sqrt2,Xdelta
+    save iter
+    iter=iter+1
+    betak = hk(1,1,:)-Mh
+    alfak = hk(1,2,:)
+    Xdelta=Uloc*x
+    sqrt2 = sqrt( Xdelta**2 + Mh**2 )
+    Ep1 = sqrt( abs(alfak)**2 + ( abs(betak) + sqrt2 )**2 ) 
+    Ep2 = sqrt( abs(alfak)**2 + ( abs(betak) - sqrt2 )**2 ) 
+    Num1 = abs(betak)+sqrt2 ; Num1=Num1/sqrt2    
+    Num2 = abs(betak)-sqrt2 ; Num2=Num2/sqrt2
+    fvec = uloc/4d0/Lk*sum( Num1/Ep1*tanh(beta*Ep1/2d0) - Num2/Ep2*tanh(beta*Ep2/2d0) ) - 1d0
+    write(100,"(I5,4F16.9)")iter,x,fvec
+    write(*,"(I5,4F16.9)")iter,x,fvec
+  end function solve_bcs
+
+
+
+
+
+
+
+
+
+
+
+
+
+end program bcs_haldane
