@@ -349,11 +349,9 @@ contains
           ik=ik+1
           Eigvec = Hk(:,:,ik)
           call eigh(Eigvec,Eigval)
-          ! do iocc=1,Noccupied
-          !    BlochStates(ikx,iky,iocc,:) = Eigvec(:,iocc)
-          ! enddo
-          BlochStates(ikx,iky,1,:) = Eigvec(:,1)
-          BlochStates(ikx,iky,2,:) = Eigvec(:,2)
+          do iocc=1,Noccupied
+             BlochStates(ikx,iky,iocc,:) = Eigvec(:,iocc)
+          enddo
        enddo
     enddo
     deallocate(Eigvec,Eigval)
