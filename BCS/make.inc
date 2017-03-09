@@ -1,6 +1,6 @@
 ##$ COMPILER: suppprted compilers are ifort, gnu >v4.7
 ##$ use mpif90 for parallel compiler
-FC=gfortran
+FC=mpif90
 
 ##$ PLATFORM: supported platform are intel, gnu
 ##$ if using a parallel compiler (mpif90) check
