@@ -3,11 +3,8 @@ program AHM_MF
   USE DMFT_TOOLS
   implicit none
 
-  integer                :: L
-  real(8)                :: beta,u
-  real(8)                :: n0
-  real(8),allocatable    :: epsi(:),dos(:),csi(:),Ep(:)
-  integer,parameter      :: ndim=2,M=5000
+
+  integer,parameter      :: ndim=1,M=5000
   real(8)                :: x(ndim),fvec(ndim)
   real(8)                :: xmu
   real(8)                :: ts,de,tol,delta0
@@ -17,7 +14,9 @@ program AHM_MF
   complex(8)             :: zdet,zeta1,zeta2,x1,x2
   complex(8),allocatable :: fg(:,:),zeta(:)
   logical                :: printf,bool
-
+  integer                :: L
+  real(8)                :: beta,u
+  real(8),allocatable    :: epsi(:),dos(:),csi(:),Ep(:)
 
   call parse_input_variable(L,"L","inputBCS.conf",default=5000)
   call parse_input_variable(Nkx,"NKX","inputBCS.conf",default=100)
@@ -27,11 +26,12 @@ program AHM_MF
   call parse_input_variable(wmax,"WMAX","inputBCS.conf",default=5.d0)
   call parse_input_variable(eps,"EPS","inputBCS.conf",default=0.01d0)
   call parse_input_variable(tol,"TOL","inputBCS.conf",default=1.d-15)
-  call parse_input_variable(n0,"N0","inputBCS.conf",default=1.d0)
   call parse_input_variable(delta0,"DELTA0","inputBCS.conf",default=1.d-2)
   call parse_input_variable(printf,"PRINTF","inputBCS.conf",default=.false.)
   call save_input_file("inputBCS.conf")
 
+
+  !Build Hk *here it is just the dispersion e(k)=-2t[coskx + cosky]
   Lk=Nkx**2
   allocate(epsi(Lk),dos(Lk),csi(Lk),Ep(Lk))
   ik=0
@@ -44,27 +44,27 @@ program AHM_MF
      enddo
   enddo
   dos = 1d0/Lk
-  !call get_free_dos(epsi,dos)
-
-  xmu=0d0
-  delta=delta0
-  x=[xmu,delta]
-  write(*,"(A5,4A16)")"Iter","mu","delta","f(mu)","f(delta)"
-  call fsolve(bcs_funcs,x,tol,info)
-
-
-
-
-
-
 
   
+  xmu=0d0
+
+  !Solve the self-consistency relations, defined in bcs_funcs (this is just an arbitrary name)
+  delta=delta0
+  x=[delta]
+  write(*,"(A5,4A16)")"Iter","delta","f(delta)"
+  call fsolve(bcs_funcs,x,tol,info)
+  delta=x(1)
+
+
+
+
+
+
+
   !!Post-processing:
-  csi  = epsi - x(1)
-  Ep   = sqrt(csi**2+x(2)**2)
+  csi  = epsi - xmu
+  Ep   = sqrt(csi**2+delta**2)
   n    = 1.d0-sum(dos*csi/Ep)
-  xmu  = x(1)
-  delta= x(2)
 
   allocate(wr(M),zeta(M))
   allocate(fg(2,M))
@@ -96,11 +96,10 @@ contains
     integer :: iflag,iter=0
     save iter
     iter=iter+1
-    csi = epsi - x(1)
-    Ep  = sqrt(csi**2+x(2)**2)
-    fvec(1) = 1.d0-sum(dos*csi/Ep)-n0
-    fvec(2) = u/2.d0*sum(dos*tanh(beta/2.d0*Ep)/Ep)-1.d0
-    write(*,"(I5,4F16.9)")iter,x(1),x(2),fvec(1),fvec(2)
+    csi = epsi - xmu
+    Ep  = sqrt(csi**2+x(1)**2)
+    fvec(1) = u/2.d0*sum(dos*tanh(beta/2.d0*Ep)/Ep)-1.d0
+    write(*,"(I5,4F16.9)")iter,x(1),fvec(1)
   end subroutine bcs_funcs
 
 

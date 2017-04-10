@@ -13,7 +13,7 @@ LIBDIR=/opt
 
 
 ##$ CHOOSE THE MODEL BY SELECTING THE PROGRAM DRIVER
-EXE=bcs_haldane_hf
+EXE=ahmbcs_square
 
 ##$ SET THE LOCATION OF YOU PROGRAM DRIVER (default is ./drivers)
 DIR=.
